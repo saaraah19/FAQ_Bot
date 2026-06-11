@@ -1,5 +1,5 @@
 # config.py — non-secret constants only
-# API key goes in .env → loaded with os.getenv("GEMINI_API_KEY") in the file that needs it
+# API key goes in .env.example → loaded with os.getenv("GEMINI_API_KEY") in the file that needs it
 
 
 EMBEDDING_MODEL = "gemini-embedding-001"
