@@ -1,17 +1,9 @@
 # app.py — orchestrator. Imports everything, calls everything. Nothing imports this.
 
 import streamlit as st
-from dotenv import load_dotenv
-from google import genai
-import os
-
 from ingest import ingest
 from retriever import build_retriever, retrieve
 from generator import generate
-
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
 
 # ── Page configuration ────────────────────────────────────────────────────────
 # Must be the first Streamlit call. Sets the browser tab title and icon.
@@ -104,64 +96,48 @@ def main():
 
     # ── Upload section ────────────────────────────────────────────────────────
     # Only rendered when show_upload is True.
-    if st.session_state["show_upload"]:
-        uploaded_file = st.file_uploader(
-            "Upload a PDF", type="pdf", label_visibility="collapsed"
-        )
 
-        # Only ingest if a file was uploaded AND it's a different file than before.
-        # Without the name check, Streamlit would re-ingest on every rerun.
+ # ── Upload section ────────────────────────────────────────────────────────
+    if st.session_state["show_upload"]:
+        uploaded_file = st.file_uploader("Upload a PDF", type="pdf", label_visibility="collapsed")
+
         if uploaded_file and uploaded_file.name != st.session_state["document_name"]:
             with st.spinner("Reading and indexing your document..."):
-                vectorstore, chunks = ingest(uploaded_file)
-                st.session_state["retriever"] = build_retriever(vectorstore, chunks)
-                st.session_state["document_name"] = uploaded_file.name
-                st.session_state["history"] = []  # reset chat for the new document
-
-            st.success(f"✅ Ready. Ask me anything about **{uploaded_file.name}**.")
-            st.session_state["show_upload"] = False  # auto-hide upload after success
-            st.rerun()  # re-render immediately so the upload panel disappears
-
-    # ── Document badge ────────────────────────────────────────────────────────
-    # Shows which document is currently loaded, always visible below the toggle.
-    if st.session_state["document_name"]:
-        st.markdown(
-            f'<div class="doc-badge">📄 {st.session_state["document_name"]}</div>',
-            unsafe_allow_html=True
-        )
-
-    # ── Chat history display ──────────────────────────────────────────────────
-    # Loop through every message stored in history and render it as a chat bubble.
-    # st.chat_message("user") shows a person icon.
-    # st.chat_message("assistant") shows a bot icon.
-    for msg in st.session_state["history"]:
-        role = "user" if msg["role"] == "user" else "assistant"
-        with st.chat_message(role):
-            st.write(msg["content"])
+                try:
+                    vectorstore, chunks = ingest(uploaded_file)
+                    st.session_state["retriever"] = build_retriever(vectorstore, chunks)
+                    st.session_state["document_name"] = uploaded_file.name
+                    st.session_state["history"] = []
+                    st.success(f"✅ Ready. Ask me anything about **{uploaded_file.name}**.")
+                    st.session_state["show_upload"] = False
+                    st.rerun()
+                except ValueError as e:
+                    # clean validation error — we wrote this message ourselves
+                    st.error(f"⚠️ Document issue: {e}")
+                except RuntimeError as e:
+                    # unexpected failure from API or file system
+                    st.error(f"❌ Processing failed: {e}")
 
     # ── Chat input ────────────────────────────────────────────────────────────
-    # st.chat_input() pins a text box to the bottom of the screen.
-    # It returns the typed text when the user hits Enter, otherwise returns None.
     question = st.chat_input("Ask a question about your document...")
-
     if question:
-        # Guard — if no document loaded yet, warn and stop here
         if not st.session_state["retriever"]:
             st.warning("Please upload a document first.")
             return
 
-        # Show the user's message immediately as a chat bubble
         with st.chat_message("user"):
             st.write(question)
 
-        # Run the pipeline and show the response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                chunks = retrieve(question, st.session_state["retriever"])
-                response = generate(question, chunks, st.session_state["history"])
+                try:
+                    chunks = retrieve(question, st.session_state["retriever"])
+                    response = generate(question, chunks, st.session_state["history"])
+                except RuntimeError as e:
+                    st.error(f"❌ {e}")
+                    return  # stop here — don't append a failed response to history
             st.write(response)
 
-        # Append both turns to history so the next call has full context
         st.session_state["history"].append({"role": "user", "content": question})
         st.session_state["history"].append({"role": "model", "content": response})
 

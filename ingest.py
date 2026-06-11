@@ -38,13 +38,28 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 def ingest(uploaded_file):
     """Orchestrates: load → chunk → embed → store in ChromaDB. Returns the vectorstore."""
+    # 1 — validate before doing anything
+    if uploaded_file.size == 0:
+        raise ValueError("The uploaded file is empty.")
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
         tmp_path = tmp.name
     try:
         documents = load_document(tmp_path)
+
+        # 2 — guard the output of load_document
+        # Scanned PDFs have no text layer — PyPDFLoader returns empty docs
+        if not documents:
+            raise ValueError("No text found in this PDF. It may be a scanned image.")
+
         chunks = chunk_text(documents)
-        # now embed chunks and store in ChromaDB ← this is what's left
+
+        # 3 — filter empty chunks before they reach ChromaDB
+        # Empty strings crash Chroma.from_documents — this is in your mistakes list
+        chunks = [c for c in chunks if c.page_content.strip()]
+        if not chunks:
+            raise ValueError("No usable content after chunking. Try a different document.")
 
         embeddings = GoogleGenerativeAIEmbeddings(
             model=EMBEDDING_MODEL,
@@ -57,5 +72,12 @@ def ingest(uploaded_file):
             persist_directory=CHROMA_DB_PATH
         )
         return vectorstore,chunks
+    except ValueError:
+        raise  # re-raise our own validation errors as-is — message is already clean
+
+    except Exception as e:
+        # catch unexpected failures (API down, disk full, etc.)
+        raise RuntimeError(f"Failed to process document: {e}")
+
     finally:
-        os.unlink(tmp_path)
+        os.unlink(tmp_path)  # always clean up temp file, even if something crashed

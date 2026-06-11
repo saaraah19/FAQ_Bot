@@ -39,23 +39,21 @@ def build_prompt(question, chunks, history):
 
 def generate(question, chunks, history):
     """Call Gemini with context and history. Returns answer string."""
-    messages = build_prompt(question, chunks, history)
-
-    contents = [
-        types.Content(
-            role=msg["role"],
-            parts=[types.Part(text=msg["content"])]
+    try:
+        messages = build_prompt(question, chunks, history)
+        contents = [
+            types.Content(role=msg["role"], parts=[types.Part(text=msg["content"])])
+            for msg in messages
+        ]
+        response = client.models.generate_content(
+            model=GENERATION_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.2,
+                max_output_tokens=1000
+            )
         )
-        for msg in messages
-    ]
-
-    response = client.models.generate_content(
-        model=GENERATION_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.2,
-            max_output_tokens=1000
-        )
-    )
-    return response.text
+        return response.text
+    except Exception as e:
+        raise RuntimeError(f"Generation failed: {e}")

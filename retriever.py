@@ -22,7 +22,9 @@ def build_retriever(vectorstore,chunks):
         weights=[0.5, 0.5]
     )
 
-
 def retrieve(query, retriever):
-    """Run hybrid search for a query. Returns list of Document chunks."""
-    return retriever.invoke(query)
+    try:
+        results = retriever.invoke(query)
+        return results if results else []  # guard: never return None
+    except Exception as e:
+        raise RuntimeError(f"Retrieval failed: {e}")
