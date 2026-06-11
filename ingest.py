@@ -11,13 +11,15 @@ from langchain_community.vectorstores import Chroma
 from config import CHUNK_SIZE, CHUNK_OVERLAP, CHROMA_COLLECTION_NAME, CHROMA_DB_PATH, EMBEDDING_MODEL
 from langchain_community.document_loaders import PyPDFLoader
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 def load_document(pdf_path):
     """Load a PDF file. Returns a list of LangChain Document objects."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError("PDF file not found.")
     if not pdf_path.endswith(".pdf"):
-        raise ValueError("eXPECTED .pdf file")
+        raise ValueError("Expected .pdf file")
 
     loader = PyPDFLoader(pdf_path)
     return loader.load()
@@ -27,7 +29,7 @@ def chunk_text(documents):
     """Split Document objects into smaller overlapping chunks. Returns list of chunks."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
-        overlap=CHUNK_OVERLAP
+        chunk_overlap=CHUNK_OVERLAP
     )
     return splitter.split_documents(documents)
 
