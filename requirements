@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-community
+langchain-chroma
+langchain-google-genai
+rank-bm25
+pypdf
+python-dotenv
+google-genai
