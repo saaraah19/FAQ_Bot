@@ -2,6 +2,8 @@
 import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
+import os
+
 import streamlit as st
 from dotenv import load_dotenv
 
