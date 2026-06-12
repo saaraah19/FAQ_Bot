@@ -1,10 +1,15 @@
 # app.py — orchestrator. Imports everything, calls everything. Nothing imports this.
+import os
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 import streamlit as st
+from dotenv import load_dotenv
+
 from ingest import ingest
 from retriever import build_retriever, retrieve
 from generator import generate
 
+load_dotenv()
 # ── Page configuration ────────────────────────────────────────────────────────
 # Must be the first Streamlit call. Sets the browser tab title and icon.
 st.set_page_config(page_title="FAQ Bot", page_icon="💬", layout="centered")
