@@ -6,56 +6,45 @@ so what do we need is :
 2. pdf path to get the needed data to be embedded
 3. store them in chromadb
 """
-from langchain_community.vectorstores import Chroma  # ← was langchain_chroma
-from config import CHUNK_SIZE, CHUNK_OVERLAP, CHROMA_COLLECTION_NAME, CHROMA_DB_PATH, EMBEDDING_MODEL
-from langchain_community.document_loaders import PyPDFLoader
 import os
+import tempfile
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL
 from dotenv import load_dotenv
 load_dotenv()
 
 def load_document(pdf_path):
-    """Load a PDF file. Returns a list of LangChain Document objects."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError("PDF file not found.")
     if not pdf_path.endswith(".pdf"):
         raise ValueError("Expected .pdf file")
-
     loader = PyPDFLoader(pdf_path)
     return loader.load()
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 def chunk_text(documents):
-    """Split Document objects into smaller overlapping chunks. Returns list of chunks."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP
     )
     return splitter.split_documents(documents)
 
-import tempfile
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
 def ingest(uploaded_file):
-    """Orchestrates: load → chunk → embed → store in ChromaDB. Returns the vectorstore."""
-    # 1 — validate before doing anything
     if uploaded_file.size == 0:
         raise ValueError("The uploaded file is empty.")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
         tmp_path = tmp.name
+
     try:
         documents = load_document(tmp_path)
-
-        # 2 — guard the output of load_document
-        # Scanned PDFs have no text layer — PyPDFLoader returns empty docs
         if not documents:
             raise ValueError("No text found in this PDF. It may be a scanned image.")
 
         chunks = chunk_text(documents)
-
-        # 3 — filter empty chunks before they reach ChromaDB
-        # Empty strings crash Chroma.from_documents — this is in your mistakes list
         chunks = [c for c in chunks if c.page_content.strip()]
         if not chunks:
             raise ValueError("No usable content after chunking. Try a different document.")
@@ -64,19 +53,12 @@ def ingest(uploaded_file):
             model=EMBEDDING_MODEL,
             google_api_key=os.getenv("GEMINI_API_KEY")
         )
-        vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            collection_name=CHROMA_COLLECTION_NAME,
-            persist_directory=CHROMA_DB_PATH
-        )
-        return vectorstore,chunks
+        vectorstore = FAISS.from_documents(chunks, embeddings)
+        return vectorstore, chunks
+
     except ValueError:
-        raise  # re-raise our own validation errors as-is — message is already clean
-
+        raise
     except Exception as e:
-        # catch unexpected failures (API down, disk full, etc.)
         raise RuntimeError(f"Failed to process document: {e}")
-
     finally:
-        os.unlink(tmp_path)  # always clean up temp file, even if something crashed
+        os.unlink(tmp_path)
