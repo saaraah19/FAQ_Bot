@@ -5,7 +5,7 @@ okey so here the user asked a question about the document , now what we need to 
 3. Ensemble Retriever
 4. Top-k Chunks
 """
-from langchain.retrievers import EnsembleRetriever  # not langchain_classic
+from langchain_classic.retrievers import EnsembleRetriever  # ← this is correct for langchain 1.3.x
 from langchain_community.retrievers import BM25Retriever
 from config import TOP_K
 def build_retriever(vectorstore,chunks):
