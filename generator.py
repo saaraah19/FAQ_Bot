@@ -37,46 +37,24 @@ def build_prompt(question, chunks, history):
     return history + [{"role": "user", "content": user_message}]
 
 
-def generate(question, chunks, history):
-    """Call Gemini with context and history. Returns answer string."""
-    try:
-        messages = build_prompt(question, chunks, history)
-        contents = [
-            types.Content(role=msg["role"], parts=[types.Part(text=msg["content"])])
-            for msg in messages
-        ]
-        response = client.models.generate_content(
-            model=GENERATION_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.2,
-                max_output_tokens=1000
-            )
-        )
-        return response.text
-    except Exception as e:
-        raise RuntimeError(f"Generation failed: {e}")
-
 def generate_stream(question, chunks, history):
-    """Même chose que generate() mais yield les tokens au fur et à mesure."""
-    try:
-        messages = build_prompt(question, chunks, history)
-        contents = [
-            types.Content(role=msg["role"], parts=[types.Part(text=msg["content"])])
-            for msg in messages
-        ]
-        response = client.models.generate_content_stream(
-            model=GENERATION_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.2,
-                max_output_tokens=1000
-            )
+    """Yields tokens as they arrive from Gemini."""
+    messages = build_prompt(question, chunks, history)
+    contents = [
+        types.Content(role=msg["role"], parts=[types.Part(text=msg["content"])])
+        for msg in messages
+    ]
+    # No try/except wrapping the yield — exceptions inside generators
+    # break st.write_stream's ability to stream in real time
+    response = client.models.generate_content_stream(
+        model=GENERATION_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.2,
+            max_output_tokens=8192  # was 1000 — that's why it got cut
         )
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
-    except Exception as e:
-        raise RuntimeError(f"Generation failed: {e}")
+    )
+    for chunk in response:
+        if chunk.text:
+            yield chunk.text
