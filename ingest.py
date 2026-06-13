@@ -6,8 +6,7 @@ so what do we need is :
 2. pdf path to get the needed data to be embedded
 3. store them in chromadb
 """
-from langchain_chroma import Chroma
-
+from langchain_community.vectorstores import Chroma  # ← was langchain_chroma
 from config import CHUNK_SIZE, CHUNK_OVERLAP, CHROMA_COLLECTION_NAME, CHROMA_DB_PATH, EMBEDDING_MODEL
 from langchain_community.document_loaders import PyPDFLoader
 import os
